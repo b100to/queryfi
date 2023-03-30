@@ -1,7 +1,13 @@
 context:
   region: apne2
-
+account: 000000
+region: us-east-1
 name: queryfi
+env: dev
+app_services:
+  - app
+  - postgresql
+
 
 #vpc
 cidr: 10.0.0.0/16
@@ -17,13 +23,43 @@ public_subnets:
 enable_nat_gateway: true
 enable_vpn_gateway: true
 
-#ecr
-ecr_name:
-  - app
-  - postgresql
+#security_group
+security_group:
+  ingress_rules:
+    - from_port: 80
+      to_port: 3000
+      protocol: tcp
+      cidr_blocks:
+        - 10.10.0.0/16
+  egress_rules:
+    - from_port: 0
+      to_port: 0
+      protocol:  "-1"
+      cidr_blocks:
+        - 10.10.0.0/16
 
 tags:
   project: env_vars_manager
   Terraform: "true"
   Environment: dev
   Owner: martin
+
+#alb
+public_alb_target_groups:
+internal_alb_target_groups:
+public_alb_config:
+  ingress_rules:
+  egress_rules:
+  listeners:
+    HTTP:
+      listener_port: 80
+      listener_protocol: HTTP
+
+internal_alb_config:
+  listeners:
+    HTTP:
+      listener_port: 80
+      listener_protocol: HTTP
+#route53
+internal_url_name: service.internal
+
