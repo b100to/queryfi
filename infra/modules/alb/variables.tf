@@ -1,0 +1,9 @@
+variable "name" {}
+variable "subnets" {}
+variable "vpc_id" {}
+variable "target_groups" {}
+variable "internal" {}
+variable "listener_port" {}
+variable "listener_protocol" {}
+variable "listeners" {}
+variable "security_groups" {}
