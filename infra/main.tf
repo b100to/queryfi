@@ -1,12 +1,8 @@
-module "iam" {
-  source   = "./modules/iam"
-  app_name = local.config.name
-}
-
 module "vpc" {
-  source = "terraform-aws-modules/vpc/aws"
+  source  = "terraform-aws-modules/vpc/aws"
+  version = "3.19.0"
 
-  name = join("-", [local.config.name, local.config.tags.Environment])
+  name = local.config.name
   cidr = local.config.cidr
 
   azs             = local.config.azs
@@ -19,76 +15,79 @@ module "vpc" {
   tags = local.config.tags
 }
 
-#module "internal_alb_security_group" {
-#  source        = "./modules/security-group"
-#  name          = "${lower(local.config.name)}-internal-alb-sg"
-#  description   = "${lower(local.config.name)}-internal-alb-sg"
-#  vpc_id        = module.vpc.vpc_id
-#  ingress_rules = local.config.internal_alb_config.ingress_rules
-#  egress_rules  = local.config.internal_alb_config.egress_rules
-#}
+module "sg_app" {
+  source     = "cloudposse/security-group/aws"
+  version    = "2.0.1"
+  attributes = ["primary"]
 
-module "public_alb_security_group" {
-  source        = "./modules/security-group"
-  name          = "${lower(local.config.name)}-public-alb-sg"
-  description   = "${lower(local.config.name)}-public-alb-sg"
-  vpc_id        = module.vpc.vpc_id
-  ingress_rules = local.config.public_alb_config.ingress_rules
-  egress_rules  = local.config.public_alb_config.egress_rules
+  # Allow unlimited egress
+  allow_all_egress = true
+
+  rules = [
+    {
+      key         = "HTTP"
+      type        = "ingress"
+      from_port   = 8000
+      to_port     = 8000
+      protocol    = "tcp"
+      cidr_blocks = []
+      self        = true
+    }
+  ]
+
+  vpc_id = module.vpc.vpc_id
+  tags   = local.config.tags
 }
-#
-#module "internal-alb" {
-#  source            = "./modules/alb"
-#  name              = "${lower(local.config.name)}-internal-alb"
-#  subnets           = module.vpc.private_subnets
-#  vpc_id            = module.vpc.vpc_id
-#  target_groups     = {for service, config in local.config.microservice_config : service => config.alb_target_group if config.is_public}
-#  internal          = true
-#  listener_port     = 80
-#  listener_protocol = "HTTP"
-#  listeners         = local.config.internal_alb_config.listeners
-#  security_groups   = [module.internal_alb_security_group.security_group_id]
-#}
-#
-#module "public-alb" {
-#  source            = "./modules/alb"
-#  name              = "${lower(local.config.name)}-public-alb"
-#  subnets           = module.vpc.public_subnets
-#  vpc_id            = module.vpc.vpc_id
-#  target_groups     = {for service, config in local.config.microservice_config : service => config.alb_target_group if config.is_public}
-#  internal          = false
-#  listener_port     = 80
-#  listener_protocol = "HTTP"
-#  listeners         = local.config.public_alb_config.listeners
-#  security_groups   = [module.public_alb_security_group.security_group_id]
-#}
-#
-#module "route53_private_zone" {
-#  source            = "./modules/route53"
-#  internal_url_name = local.config.internal_url_name
-#  alb               = module.internal-alb.internal_alb
-#  vpc_id            = module.vpc.vpc_id
-#}
-#
+
 module "ecr" {
-  source           = "./modules/ecr"
-  app_name         = local.config.name
-  ecr_repositories = local.config.app_services
+  source = "cloudposse/ecr/aws"
+  version = "0.35.0"
+  name                   = local.config.name
+  tags = local.config.tags
 }
 
-#module "ecs" {
-#  source                      = "./modules/ecs"
-#  app_name                    = local.config.name
-#  app_services                = local.config.app_services
-#  account                     = local.config.account
-#  region                      = local.config.region
-#  service_config              = local.config.microservice_config
-#  ecs_task_execution_role_arn = module.iam.ecs_task_execution_role_arn
-#  vpc_id                      = module.vpc.vpc_id
-#  private_subnets             = module.vpc.private_subnets
-#  public_subnets              = module.vpc.public_subnets
-#  public_alb_security_group   = module.public_alb_security_group
-#  internal_alb_security_group = module.internal_alb_security_group
-#  internal_alb_target_groups  = module.internal-alb.target_groups
-#  public_alb_target_groups    = module.public-alb.target_groups
-#}
+resource "aws_ecs_cluster" "default" {
+  name = local.config.name
+  tags = local.config.tags
+}
+
+module "container_definition" {
+  source                       = "cloudposse/ecs-container-definition/aws"
+  version                      = "0.58.2"
+  container_name               = local.config.container_name
+  container_image              = local.config.container_image
+  container_memory             = local.config.container_memory
+  container_memory_reservation = local.config.container_memory_reservation
+  container_cpu                = local.config.container_cpu
+  essential                    = local.config.container_essential
+  environment                  = local.config.container_environment
+  port_mappings                = local.config.container_port_mappings
+}
+
+module "ecs_alb_service_task" {
+  source             = "cloudposse/ecs-alb-service-task/aws"
+  version            = "0.68.0"
+  name               = local.config.name
+  alb_security_group = module.vpc.default_security_group_id
+  container_definition_json = jsonencode([
+    module.container_definition.json_map_object,
+  ])
+  ecs_cluster_arn                = aws_ecs_cluster.default.arn
+  launch_type                    = local.config.ecs_launch_type
+  vpc_id                         = module.vpc.vpc_id
+  security_group_ids             = [module.vpc.default_security_group_id]
+  subnet_ids                     = module.vpc.public_subnets
+  ignore_changes_task_definition = local.config.ignore_changes_task_definition
+  network_mode                   = local.config.network_mode
+  assign_public_ip               = local.config.assign_public_ip
+  propagate_tags                 = local.config.propagate_tags
+  desired_count                  = local.config.desired_count
+  task_memory                    = local.config.task_memory
+  task_cpu                       = local.config.task_cpu
+  tags                           = local.config.tags
+  depends_on = [
+    module.vpc,
+    aws_ecs_cluster.default,
+    module.container_definition
+  ]
+}
