@@ -1,3 +1,20 @@
+module "http_security_group" {
+  source  = "cloudposse/security-group/aws"
+  version = "2.0.1"
+
+  attributes = [local.config.sg_app_name]
+
+  # Allow unlimited egress
+  allow_all_egress = true
+
+  rules = [
+    local.config.app,
+  ]
+  vpc_id = module.vpc.vpc_id
+  tags   = local.config.tags
+}
+
+
 module "app_security_group" {
   source  = "cloudposse/security-group/aws"
   version = "2.0.1"

@@ -24,6 +24,17 @@ enable_nat_gateway: true
 enable_vpn_gateway: true
 
 #sg
+
+http:
+  key: http
+  type : ingress
+  from_port : 80
+  to_port : 80
+  protocol : http
+  cidr_blocks :
+    - 0.0.0.0/0
+  self: "true"
+
 ssh:
   type : ingress
   from_port : 22
@@ -53,11 +64,17 @@ sql:
   protocol: tcp
   self: "true"
 
+#s3
+acl: log-delivery-write
+force_destroy: true
+attach_elb_log_delivery_policy: true
+
 #service
 ecs_launch_type: FARGATE
 network_mode: awsvpc
 ignore_changes_task_definition: true
 propagate_tags: TASK_DEFINITION
+security_group_enabled: "false"
 desired_count: 1
 task_memory: 1024
 task_cpu: 512

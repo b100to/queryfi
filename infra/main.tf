@@ -38,12 +38,58 @@ module "container_definition_postgresql" {
 
 }
 
-resource "aws_lb_target_group" "this" {
-  name        = "${local.config.name}-tg"
-  port        = 80
-  protocol    = "HTTP"
-  target_type = "ip"
-  vpc_id      = module.vpc.vpc_id
+module "s3_bucket_for_logs" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "${local.config.name}-alb-logs"
+  acl    = local.config.acl
+
+  # Allow deletion of non-empty bucket
+  force_destroy = local.config.force_destroy
+  attach_elb_log_delivery_policy = local.config.attach_elb_log_delivery_policy
+}
+
+module "alb" {
+  source  = "terraform-aws-modules/alb/aws"
+  version = "~> 8.0"
+
+  name = "${local.config.name}-alb"
+
+  load_balancer_type = "application"
+
+  vpc_id             = module.vpc.vpc_id
+  subnets            = module.vpc.private_subnets
+  security_groups    = [
+    module.app_security_group.id,
+    module.db_security_group.id
+  ]
+
+  access_logs = {
+    bucket = "${local.config.name}-alb-logs"
+  }
+
+  target_groups = [
+    {
+      name_prefix      = "pref-"
+      backend_protocol = "HTTP"
+      backend_port     = 80
+      target_type      = "ip"
+    }
+  ]
+
+  http_tcp_listeners = [
+    {
+      port               = 80
+      protocol           = "HTTP"
+      target_group_index = 0
+    }
+  ]
+
+  tags = local.config.tags
+  depends_on = [
+    module.vpc,
+    module.s3_bucket_for_logs
+  ]
 }
 
 module "ecs_alb_service_task" {
@@ -58,6 +104,7 @@ module "ecs_alb_service_task" {
   ecs_cluster_arn                = aws_ecs_cluster.default.arn
   launch_type                    = local.config.ecs_launch_type
   vpc_id                         = module.vpc.vpc_id
+  security_group_enabled =  local.config.security_group_enabled
   security_group_ids             = [
     module.app_security_group.id,
     module.db_security_group.id
@@ -75,7 +122,7 @@ module "ecs_alb_service_task" {
     container_name   = local.config.container_app_name
     container_port   = "8000"
     elb_name         = ""
-    target_group_arn = aws_lb_target_group.this.arn
+    target_group_arn = module.alb.security_group_arn
   }]
   tags                           = local.config.tags
   depends_on = [
@@ -84,7 +131,7 @@ module "ecs_alb_service_task" {
     module.container_definition_app,
     module.container_definition_postgresql,
     module.app_security_group,
-    module.db_security_group
+    module.db_security_group,
+    module.alb
   ]
 }
-
