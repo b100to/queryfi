@@ -7,6 +7,14 @@ module "ecr" {
   tags    = local.config.tags
 }
 
+module "ecr_db" {
+  source  = "cloudposse/ecr/aws"
+  version = "0.35.0"
+  name    = local.config.container_postgresql_name
+  tags    = local.config.tags
+}
+
+
 resource "aws_ecs_cluster" "default" {
   name = local.config.name
   tags = local.config.tags
@@ -16,12 +24,13 @@ module "container_definition_app" {
   source                       = "cloudposse/ecs-container-definition/aws"
   version                      = "0.58.2"
   container_name               = local.config.container_app_name
-  container_image              = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${local.config.region}.amazonaws.com/${local.config.container_app_name}"
+  container_image              = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${local.config.region}.amazonaws.com/${local.config.container_app_image}"
   container_memory             = local.config.container_app_memory
   container_memory_reservation = local.config.container_app_memory_reservation
   container_cpu                = local.config.container_app_cpu
   essential                    = local.config.container_app_essential
   port_mappings                = local.config.container_app_port_mappings
+  command                      = local.config.container_app_command
 }
 
 module "container_definition_postgresql" {
@@ -95,7 +104,7 @@ module "alb" {
 module "ecs_alb_service_task" {
   source             = "cloudposse/ecs-alb-service-task/aws"
   version            = "0.68.0"
-  name               = local.config.name
+  name               = "${local.config.name}-${local.config.env}"
   alb_security_group = module.vpc.default_security_group_id
   container_definition_json = jsonencode([
     module.container_definition_app.json_map_object,
@@ -118,12 +127,12 @@ module "ecs_alb_service_task" {
   task_cpu                       = local.config.task_cpu
   exec_enabled                   = local.config.exec_enabled
   force_new_deployment           = local.config.force_new_deployment
-  ecs_load_balancers             = [{
-    container_name   = local.config.container_app_name
-    container_port   = "8000"
-    elb_name         = ""
-    target_group_arn = module.alb.security_group_arn
-  }]
+#  ecs_load_balancers             = [{
+#    container_name   = local.config.container_app_name
+#    container_port   = local.config.container_port
+#    elb_name         = ""
+#    target_group_arn = module.alb.security_group_arn
+#  }]
   tags                           = local.config.tags
   depends_on = [
     module.vpc,
