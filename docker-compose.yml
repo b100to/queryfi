@@ -11,10 +11,8 @@ services:
       - "8000:8000"
     depends_on:
       - db
-#      - cache
-
   db:
-    image: postgres:13
+    image: postgres:15.2-alpine
     environment:
       - POSTGRES_DB=postgres
       - POSTGRES_USER=admin
@@ -23,8 +21,6 @@ services:
       - db_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
-#  cache:
-#    image: redis:6
 
 volumes:
   db_data:

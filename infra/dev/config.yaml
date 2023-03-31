@@ -23,22 +23,48 @@ public_subnets:
 enable_nat_gateway: true
 enable_vpn_gateway: true
 
-tags:
-  project: env_vars_manager
-  Terraform: "true"
-  Environment: dev
-  Owner: martin
+#sg
+ssh:
+  type : ingress
+  from_port : 22
+  to_port : 22
+  protocol : tcp
+  cidr_blocks :
+    - 0.0.0.0/0
+  self: "true"
 
+sg_app_name: app
+app:
+  key: app
+  type: ingress
+  from_port: 8000
+  to_port: 8000
+  protocol: tcp
+  cidr_blocks:
+    - 10.10.0.0/16
+  self: "true"
+
+sg_sql_name: postgresql
+sql:
+  key: sql
+  type: ingress
+  from_port: 5432
+  to_port: 5432
+  protocol: tcp
+  self: "true"
+
+#service
 ecs_launch_type: FARGATE
 network_mode: awsvpc
 ignore_changes_task_definition: true
 propagate_tags: TASK_DEFINITION
 desired_count: 1
-task_memory: 512
-task_cpu: 256
-
+task_memory: 1024
+task_cpu: 512
+exec_enabled: "true"
+force_new_deployment: "true"
 #container_definition_app
-container_app_name: geodesic
+container_app_name: app
 container_app_image: cloudposse/geodesic
 container_app_command:
   - uvicorn
@@ -51,27 +77,34 @@ container_app_command:
 container_app_memory: 256
 container_app_memory_reservation: 128
 container_app_cpu: 256
-container_app_port_mappings: 8000
+container_app_port_mappings:
+  - containerPort: 8000
+    hostPort: 8000
+    protocol: tcp
 container_app_essential: true
-container_app_environment:
-  - name: POSTGRES_DB
-    value: postgres
-  - name: POSTGRES_USER
-    value: admin
-  - name: POSTGRES_PASSWORD
-    value: admin
+
 #container_definition_postgresql
 container_postgresql_name: postgres
 container_postgresql_image: postgres/15.2-alpine
 container_postgresql_memory: 256
 container_postgresql_memory_reservation: 128
 container_postgresql_cpu: 256
-container_postgresql_port_mappings: 5432
+container_postgresql_port_mappings:
+  - containerPort: 5432
+    hostPort: 5432
+    protocol: tcp
+
 container_postgresql_essential: true
 container_postgresql_environment:
-  - name: string_var
-    value: I am a string
-  - name: true_boolean_var
-    value: true
+  - name: POSTGRES_DB
+    value: postgres
+  - name: POSTGRES_USER
+    value: admin
+  - name: POSTGRES_PASSWORD
+    value: admin
 
-
+tags:
+  project: env_vars_manager
+  Terraform: "true"
+  Environment: dev
+  Owner: martin
