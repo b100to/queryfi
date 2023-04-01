@@ -7,13 +7,6 @@ module "ecr" {
   tags    = local.config.tags
 }
 
-module "ecr_db" {
-  source  = "cloudposse/ecr/aws"
-  version = "0.35.0"
-  name    = local.config.container_postgresql_name
-  tags    = local.config.tags
-}
-
 
 resource "aws_ecs_cluster" "default" {
   name = local.config.name
@@ -44,7 +37,6 @@ module "container_definition_postgresql" {
   essential                    = local.config.container_postgresql_essential
   environment                  = local.config.container_postgresql_environment
   port_mappings                = local.config.container_postgresql_port_mappings
-
 }
 
 module "s3_bucket_for_logs" {

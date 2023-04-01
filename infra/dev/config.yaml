@@ -97,7 +97,7 @@ container_app_port_mappings:
 container_app_essential: true
 
 #container_definition_postgresql
-container_postgresql_name: db
+container_postgresql_name: postgres
 container_postgresql_image: public.ecr.aws/docker/library/postgres:13-alpine
 container_postgresql_memory: 256
 container_postgresql_memory_reservation: 128
