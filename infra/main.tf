@@ -7,7 +7,6 @@ module "ecr" {
   tags    = local.config.tags
 }
 
-
 resource "aws_ecs_cluster" "default" {
   name = local.config.name
   tags = local.config.tags
